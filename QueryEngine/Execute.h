@@ -959,6 +959,9 @@ class Executor {
                                     const bool has_cardinality_estimation,
                                     ColumnCacheMap& column_cache,
                                     RenderInfo* render_info = nullptr);
+  // Generate code to skip the deleted rows in the outermost table.
+  llvm::BasicBlock* codegenSkipDeletedOuterTableRow(const RelAlgExecutionUnit& ra_exe_unit,
+                                                    const CompilationOptions& co);
   std::vector<JoinLoop> buildJoinLoops(RelAlgExecutionUnit& ra_exe_unit,
                                        const CompilationOptions& co,
                                        const ExecutionOptions& eo,
