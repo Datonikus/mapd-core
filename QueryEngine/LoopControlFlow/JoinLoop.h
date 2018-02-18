@@ -56,6 +56,7 @@ class JoinLoop {
            const std::function<JoinLoopDomain(const std::vector<llvm::Value*>&)>&,
            const std::function<llvm::Value*(const std::vector<llvm::Value*>&)>&,
            const std::function<void(llvm::Value*)>&,
+           const std::function<llvm::Value*(const std::vector<llvm::Value*>& prev_iters)>&,
            const std::string& name = "");
 
   static llvm::BasicBlock* codegen(
@@ -85,5 +86,7 @@ class JoinLoop {
   // Callback provided from the executor which receives the IR boolean value which tracks
   // whether there are matches for the current iteration.
   const std::function<void(llvm::Value*)> found_outer_matches_;
+  // Callback provided from the executor which returns if the current row (given by position) is deleted.
+  const std::function<llvm::Value*(const std::vector<llvm::Value*>& prev_iters)> is_deleted_;
   const std::string name_;
 };

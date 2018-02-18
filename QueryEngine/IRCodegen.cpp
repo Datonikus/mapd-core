@@ -311,6 +311,7 @@ std::vector<JoinLoop> Executor::buildJoinLoops(RelAlgExecutionUnit& ra_exe_unit,
       CHECK(!cgen_state_->outer_join_match_found_per_level_[level_idx]);
       cgen_state_->outer_join_match_found_per_level_[level_idx] = found_outer_join_matches;
     };
+    const auto is_deleted_cb = buildIsDeletedCb(ra_exe_unit, level_idx, co);
     if (current_level_hash_table) {
       if (current_level_hash_table->getHashType() == JoinHashTable::HashType::OneToOne) {
         join_loops.emplace_back(
@@ -326,7 +327,8 @@ std::vector<JoinLoop> Executor::buildJoinLoops(RelAlgExecutionUnit& ra_exe_unit,
             nullptr,
             current_level_join_conditions.type == JoinType::LEFT
                 ? std::function<void(llvm::Value*)>(found_outer_join_matches_cb)
-                : nullptr);
+                : nullptr,
+            is_deleted_cb);
       } else {
         join_loops.emplace_back(JoinLoopKind::Set,
                                 current_level_join_conditions.type,
@@ -343,7 +345,8 @@ std::vector<JoinLoop> Executor::buildJoinLoops(RelAlgExecutionUnit& ra_exe_unit,
                                 nullptr,
                                 current_level_join_conditions.type == JoinType::LEFT
                                     ? std::function<void(llvm::Value*)>(found_outer_join_matches_cb)
-                                    : nullptr);
+                                    : nullptr,
+                                is_deleted_cb);
       }
       ++current_hash_table_idx;
     } else {
@@ -382,10 +385,35 @@ std::vector<JoinLoop> Executor::buildJoinLoops(RelAlgExecutionUnit& ra_exe_unit,
               : nullptr,
           current_level_join_conditions.type == JoinType::LEFT
               ? std::function<void(llvm::Value*)>(found_outer_join_matches_cb)
-              : nullptr);
+              : nullptr,
+          is_deleted_cb);
     }
   }
   return join_loops;
+}
+
+std::function<llvm::Value*(const std::vector<llvm::Value*>&)> Executor::buildIsDeletedCb(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const size_t level_idx,
+    const CompilationOptions& co) {
+  CHECK_LT(level_idx + 1, ra_exe_unit.input_descs.size());
+  const auto input_desc = ra_exe_unit.input_descs[level_idx + 1];
+  if (input_desc.getSourceType() != InputSourceType::TABLE) {
+    return nullptr;
+  }
+  const auto td = catalog_->getMetadataForTable(input_desc.getTableId());
+  CHECK(td);
+  const auto deleted_cd = catalog_->getDeletedColumn(td);
+  if (!deleted_cd) {
+    return nullptr;
+  }
+  CHECK(deleted_cd->columnType.is_boolean());
+  const auto deleted_expr = makeExpr<Analyzer::ColumnVar>(
+      deleted_cd->columnType, input_desc.getTableId(), deleted_cd->columnId, input_desc.getNestLevel());
+  return [this, deleted_expr, level_idx, &co](const std::vector<llvm::Value*>& prev_iters) {
+    addJoinLoopIterator(prev_iters, level_idx + 1);
+    return toBool(codegen(deleted_expr.get(), true, co).front());
+  };
 }
 
 std::shared_ptr<JoinHashTableInterface> Executor::buildCurrentLevelHashTable(

@@ -964,6 +964,10 @@ class Executor {
                                        const ExecutionOptions& eo,
                                        const std::vector<InputTableInfo>& query_infos,
                                        ColumnCacheMap& column_cache);
+  // Create a callback which generates code which returns true iff the row on the given level is deleted.
+  std::function<llvm::Value*(const std::vector<llvm::Value*>&)> buildIsDeletedCb(const RelAlgExecutionUnit& ra_exe_unit,
+                                                                                 const size_t level_idx,
+                                                                                 const CompilationOptions& co);
   // Builds a join hash table for the provided conditions on the current level.
   // Returns null iff on failure and provides the reasons in `fail_reasons`.
   std::shared_ptr<JoinHashTableInterface> buildCurrentLevelHashTable(const JoinCondition& current_level_join_conditions,
